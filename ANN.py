@@ -47,6 +47,11 @@ def set_seed(seed=None, seed_torch=True):
         random.seed(seed)
         np.random.seed(seed)
 
+def seed_worker(worker_id):
+    worker_seed = torch.initial_seed() % 2**32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
+
 ###########################################################
 ### Coding Exercise 1 - Function Approximation with ReLU ###
 ###########################################################
@@ -139,6 +144,77 @@ def create_spiral_dataset(K, sigma, N):
 
     return X, y
 
+def shuffle_and_split_data(X, y, seed):
+
+    torch.manual_seed(seed)
+    # Number of samples
+    N = X.shape[0]
+    # Shuffle data
+    shuffled_indices = torch.randperm(N)
+    X = X[shuffled_indices]
+    y = y[shuffled_indices]
+    # Split data into train/test
+    test_size = int(N * 0.2)
+    X_test = X[:test_size]
+    y_test = y[:test_size]
+    X_train = X[test_size:]
+    y_train = y[test_size:]
+    
+    return X_test, y_test, X_train, y_train
+
+def train_test_classification(net, criterion, optimizer, train_loader,
+                              test_loader, num_epochs=1, verbose=True,
+                              training_plot=False, device='cpu'):
+    net.train()
+    training_losses = []
+    for epoch in tqdm(range(num_epochs)):
+        running_loss = 0.0
+        
+        for i, data in enumerate(train_loader, 0):
+            inputs, labels = data
+            inputs = inputs.float()
+            labels = labels.long()
+            # zero the parameter gradients
+            optimizer.zero_grad()
+            # forward + backward + optimize
+            outputs = net(inputs)
+            # apply the defined loss function
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
+
+            if verbose:
+                training_losses += [loss.item()]
+        
+        net.eval()
+
+    def test(data_loader):
+        correct = 0
+        total = 0
+        for data in data_loader:
+            inputs, labels = data
+            inputs = inputs.float()
+            labels = labels.long()
+
+            outputs = net(inputs)
+            _, predicted = torch.max(outputs, 1)
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+        acc = 100 * correct / total
+        return total, acc
+
+    train_total, train_acc = test(train_loader)
+    test_total, test_acc = test(test_loader)
+    if verbose:
+        print(f"Accuracy on the {train_total} training samples: {train_acc:0.2f}")
+        print(f"Accuracy on the {test_total} testing samples: {test_acc:0.2f}")
+    if training_plot:
+        plt.plot(training_losses)
+        plt.xlabel('Batch')
+        plt.ylabel('Training loss')
+        plt.show()
+
+    return train_acc, test_acc
 
 if __name__ == "__main__":
     SEED = 2021
@@ -175,8 +251,36 @@ if __name__ == "__main__":
     N = 1000
     set_seed(seed=SEED)
     X, y = create_spiral_dataset(K, sigma, N)
-    plt.scatter(X[:, 0], X[:, 1], c = y)
+    #plt.scatter(X[:, 0], X[:, 1], c = y)
+    #plt.show()
+
+    ###########################
+    ### Testing Section 2.3 ###
+    ###########################
+
+    X_test, y_test, X_train, y_train = shuffle_and_split_data(X, y, seed=SEED)
+    plt.scatter(X_test[:, 0], X_test[:, 1], c=y_test)
+    plt.title('Test data')
     plt.show()
 
+    g_seed = torch.Generator()
+    g_seed.manual_seed(SEED)
 
+    batch_size = 128
+    test_data = TensorDataset(X_test, y_test)
+    test_loader = DataLoader(test_data, batch_size=batch_size,
+                            shuffle=False, num_workers=2,
+                            worker_init_fn=seed_worker)
 
+    train_data = TensorDataset(X_train, y_train)
+    train_loader = DataLoader(train_data, batch_size=batch_size, drop_last=True,
+                            shuffle=True, num_workers=2,
+                            worker_init_fn=seed_worker)
+
+    net = Net('ReLU()', X_train.shape[1], [128], K)
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(net.parameters(), lr=1e-3)
+    num_epochs = 100
+
+    train_test_classification(net, criterion, optimizer, train_loader,
+                test_loader, num_epochs=num_epochs, training_plot=True)
