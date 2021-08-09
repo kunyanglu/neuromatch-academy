@@ -70,16 +70,23 @@ def train(args, model, train_loader, optimizer,
         
         optimizer.zero_grad()
         output = model(data)
-        if reg_function1 is None:
-            loss = criterion(output, target)
-        elif reg_function2 is None:
+        # L1 regularization
+        if reg_function2 is None and reg_function1 is not None:
             loss = criterion(output, target) + \
-            args['lambda']*reg_function1(model)
+                    args['lambda1']*reg_function1(model)
+        # L2 regularization
+        elif reg_function1 is None and reg_function2 is not None:
+            loss = criterion(output, target) + \
+                args['lambda2']*reg_function2(model)
+        # No regularization
+        elif reg_function1 is None and reg_function2 is None:
+            loss = criterion(output, target)
+        # Both L1 and L2 regularizations
         else:
             loss = criterion(output, target) + \
-            args['lambda1']*reg_function1(model) + \
-            args['lambda2']*reg_function2(model)
-        
+                    args['lambda1']*reg_function1(model) + \
+                    args['lambda2']*reg_function2(model)   
+
         loss.backward()
         optimizer.step()
     
