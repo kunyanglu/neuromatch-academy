@@ -13,8 +13,8 @@ from torch.utils.data import DataLoader, TensorDataset
 from tqdm.auto import tqdm
 from IPython.display import display
 
-from ANN import Net, train_test_classification 
-from ANN import shuffle_and_split_data, set_seed, seed_worker
+from MLP import Net, train_test_classification 
+from MLP import shuffle_and_split_data, set_seed, seed_worker
 
 ### Ploting Functions ###
 def imshow(img):
