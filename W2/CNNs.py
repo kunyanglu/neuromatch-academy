@@ -9,6 +9,7 @@ import torch.optim as optim
 import zipfile, gzip, shutil, tarfile
 import requests, os
 
+import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
@@ -128,6 +129,75 @@ class Net2(nn.Module):
         x = self.pool(x)
         return x
 
+################################################
+### Coding Exercise 4 - Implement My Own CNN ###
+################################################
+
+class myCNN(nn.Module):
+
+    def __init__(self, padding=0, stride=0):
+        
+        super(myCNN, self).__init__()
+        
+        self.layer = nn.Sequential(
+                
+                nn.Conv2d(in_channels=1, out_channels=32, kernel_size=3),
+                nn.ReLU(),
+
+                nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3),
+                nn.ReLU(),
+
+                nn.MaxPool2d(kernel_size=2),
+                nn.Flatten(),
+
+                nn.Linear(in_features=9216, out_features=128),
+                nn.ReLU(),
+
+                nn.Linear(in_features=128, out_features=2)
+        )
+
+    def forward(self, x):
+        
+        return self.layer(x)
+
+def train(model, device, train_loader, epochs):
+    model.train()
+    
+    loss_fn = nn.CrossEntropyLoss()
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
+
+    for epoch in range(epochs):
+        with tqdm(train_loader, unit='batch') as tepoch:
+            for data, target in tepoch:
+                data, target = data.to(device), target.to(device)
+                optimizer.zero_grad()
+                output = model(data)
+
+                loss = loss_fn(output, target)
+                loss.backward()
+                optimizer.step()
+                tepoch.set_postfix(loss=loss.item())
+                time.sleep(0.1)
+
+def test(model, device, data_loader):
+    model.eval()
+    correct = 0
+    total = 0
+    
+    for data in data_loader:
+        inputs, labels = data
+        inputs = inputs.to(device).float()
+        labels = labels.to(device).long()
+
+        outputs = model(inputs)
+        _, predicted = torch.max(outputs, 1)
+        total += labels.size(0)
+        correct += (predicted == labels).sum().item()
+    
+    acc = 100 * correct / total
+
+    return acc
+
 def get_Xvs0_dataset(normalize=False, download=False):
     
     if normalize:
@@ -205,7 +275,8 @@ def display_after_filter(emnist_train, emnist_test):
     output_o = net2(o_img)
     print(f'Output shape After Downsampling {output_o.shape}')
     output_o = output_o.squeeze(dim=0).detach().cpu().numpy()
-    
+    print(f'Output shape After Downsampling {output_o.shape}')
+
     fig, ((ax11, ax12, ax13, ax14),
           (ax21, ax22, ax23, ax24),
           (ax31, ax32, ax33, ax34)) = plt.subplots(3, 4)
@@ -267,8 +338,7 @@ if __name__ == "__main__":
     output = net(image)
     print("Output:\n" + str(output))
     '''
-    emnist_train, emnist_test = get_Xvs0_dataset(normalize=False, 
-                                                download=True)
+    emnist_train, emnist_test = get_Xvs0_dataset(normalize=True)
    
     train_loader, test_loader = get_data_loaders(emnist_train, emnist_test,
                                                     seed=SEED)
@@ -277,4 +347,17 @@ if __name__ == "__main__":
     ### Test Section 3 ###
     ######################
     
-    display_after_filter(emnist_train, emnist_test)
+    # display_after_filter(emnist_train, emnist_test)
+
+    ##############################
+    ### Test Coding Exercise 4 ###
+    ##############################
+
+    # Train the network
+    emnist_net = myCNN().to('cpu')
+    print("Total Parameters in Network {:10d}".format( \
+        sum(p.numel() for p in emnist_net.parameters())))
+    
+    train(emnist_net, 'cpu', train_loader, 1)
+    test_accuracy = test(emnist_net, 'cpu', test_loader)
+    print(f'Test Accuracy: {test_accuracy}')
