@@ -62,21 +62,11 @@ def convolution2d(image, kernel):
 
     return output
 
+######################################
+### Section 3.1 - Multiple Filters ###
+######################################
 
-def load_image():
-
-    if not os.path.exists('images/'):
-        os.mkdir('images/')
-
-    url = "https://raw.githubusercontent.com/NeuromatchAcademy/ \
-            course-content-dl/main/tutorials/ \
-            W2D1_ConvnetsAndRecurrentNeuralNetworks/ \
-            static/chicago_skyline_shrunk_v2.bmp"
-    r = requests.get(url, allow_redirects=True)
-    with open("images/chicago_skyline_shrunk_v2.bmp", 'wb') as fd:
-        fd.write(r.content)
-
-### Build a ConvNet with Pytorch
+### Build a simple ConvNet with Pytorch
 class Net(nn.Module):
 
     def __init__(self, kernel=None, padding=0):
@@ -95,7 +85,49 @@ class Net(nn.Module):
         
         return self.conv1(x)
 
-### Use CNN and the EMNIST dataset to build a X/O classifier
+class Net2(nn.Module):
+
+    def __init__(self, padding=0):
+        super(Net2, self).__init__()
+        self.conv1 = nn.Conv2d(in_channels=1, out_channels=3, kernel_size=5,
+                                padding=padding)
+
+        # first kernel - leading diagonal
+        kernel_1 = torch.Tensor([[[ 1.,  1., -1., -1., -1.],
+                                  [ 1.,  1.,  1., -1., -1.],
+                                  [-1.,  1.,  1.,  1., -1.],
+                                  [-1., -1.,  1.,  1.,  1.],
+                                  [-1., -1., -1.,  1.,  1.]]])
+
+        # second kernel - other diagonal
+        kernel_2 = torch.Tensor([[[-1., -1., -1.,  1.,  1.],
+                                  [-1., -1.,  1.,  1.,  1.],
+                                  [-1.,  1.,  1.,  1., -1.],
+                                  [ 1.,  1.,  1., -1., -1.],
+                                  [ 1.,  1., -1., -1., -1.]]])
+
+        # third kernel - checkerboard pattern
+        kernel_3 = torch.Tensor([[[ 1.,  1., -1.,  1.,  1.],
+                                  [ 1.,  1.,  1.,  1.,  1.],
+                                  [-1.,  1.,  1.,  1., -1.],
+                                  [ 1.,  1.,  1.,  1.,  1.],
+                                  [ 1.,  1., -1.,  1.,  1.]]])
+
+
+        # Stack all kernels in one tensor with (3, 1, 5, 5) dimensions
+        multiple_kernels = torch.stack([kernel_1, kernel_2, kernel_3], dim=0)
+
+        self.conv1.weight = torch.nn.Parameter(multiple_kernels)
+        # Negative bias to give a threshold to select the high output value
+        self.conv1.bias = torch.nn.Parameter(torch.Tensor([-4, -4, -12]))
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = F.relu(x)
+        x = self.pool(x)
+        return x
+
 def get_Xvs0_dataset(normalize=False, download=False):
     
     if normalize:
@@ -136,49 +168,6 @@ def get_Xvs0_dataset(normalize=False, download=False):
     
     return emnist_train, emnist_test
 
-######################################
-### Section 3.1 - Multiple Filters ###
-######################################
-
-class Net2(nn.Module):
-
-    def __init__(self, padding=0):
-        super(Net2, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels=1, out_channels=3, kernel_size=3,
-                                padding=padding)
-
-        # first kernel - leading diagonal
-        kernel_1 = torch.Tensor([[[ 1.,  1., -1., -1., -1.],
-                                  [ 1.,  1.,  1., -1., -1.],
-                                  [-1.,  1.,  1.,  1., -1.],
-                                  [-1., -1.,  1.,  1.,  1.],
-                                  [-1., -1., -1.,  1.,  1.]]])
-
-        # second kernel - other diagonal
-        kernel_2 = torch.Tensor([[[-1., -1., -1.,  1.,  1.],
-                                  [-1., -1.,  1.,  1.,  1.],
-                                  [-1.,  1.,  1.,  1., -1.],
-                                  [ 1.,  1.,  1., -1., -1.],
-                                  [ 1.,  1., -1., -1., -1.]]])
-
-        # third kernel - checkerboard pattern
-        kernel_3 = torch.Tensor([[[ 1.,  1., -1.,  1.,  1.],
-                                  [ 1.,  1.,  1.,  1.,  1.],
-                                  [-1.,  1.,  1.,  1., -1.],
-                                  [ 1.,  1.,  1.,  1.,  1.],
-                                  [ 1.,  1., -1.,  1.,  1.]]])
-
-
-        # Stack all kernels in one tensor with (3, 1, 5, 5) dimensions
-        multiple_kernels = torch.stack([kernel_1, kernel_2, kernel_3], dim=0)
-
-        self.conv1.weight = torch.nn.Parameter(multiple_kernels)
-        # Negative bias to give a threshold to select the high output value
-        self.conv1.bias = torch.nn.Parameter(torch.Tensor([-4, -4, -12]))
-
-    def forward(self, x):
-
-        return self.conv1(x)
 
 def get_data_loaders(train_dataset, test_dataset, batch_size=32, seed=0):
 
@@ -199,35 +188,12 @@ def get_data_loaders(train_dataset, test_dataset, batch_size=32, seed=0):
                             generator=g_seed)
     
     return train_loader, test_loader
-
-def display_sample_img(emnist_train, emnist_test):
-
-    # Display sample images    
-    fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4, figsize=(12, 6))
-    ax1.imshow(emnist_train[0][0].reshape(28, 28), cmap='gray')
-    ax2.imshow(emnist_train[10][0].reshape(28, 28), cmap='gray')
-    ax3.imshow(emnist_train[4][0].reshape(28, 28), cmap='gray')
-    ax4.imshow(emnist_train[6][0].reshape(28, 28), cmap='gray')
-    plt.show()
     
-def plot_filters():
-    ### Visualize the three filters defined
-    net2 = Net2().to('cpu')
-    fig, (ax11, ax12, ax13) = plt.subplots(1, 3)
-    # Plot filters
-    ax11.set_title("filter 1")
-    ax11.imshow(net2.conv1.weight[0, 0].detach().cpu().numpy(), cmap="gray")
-    ax12.set_title("filter 2")
-    ax12.imshow(net2.conv1.weight[1, 0].detach().cpu().numpy(), cmap="gray")
-    ax13.set_title("filter 3")
-    ax13.imshow(net2.conv1.weight[2, 0].detach().cpu().numpy(), cmap="gray")
-    plt.show()
-
 def display_after_filter(emnist_train, emnist_test):
     
     # Index of an image in the dataset that corresponds to an X and O
-    x_img_idx = 11
-    o_img_idx = 0
+    x_img_idx = 4
+    o_img_idx = 15
 
     net2 = Net2().to('cpu')
     x_img = emnist_train[x_img_idx][0].unsqueeze(dim=0).to('cpu')
@@ -235,9 +201,11 @@ def display_after_filter(emnist_train, emnist_test):
     output_x = output_x.squeeze(dim=0).detach().cpu().numpy()
 
     o_img = emnist_train[o_img_idx][0].unsqueeze(dim=0).to('cpu')
+    print(f'Input shape Before Downsampling {o_img.shape}')
     output_o = net2(o_img)
+    print(f'Output shape After Downsampling {output_o.shape}')
     output_o = output_o.squeeze(dim=0).detach().cpu().numpy()
-
+    
     fig, ((ax11, ax12, ax13, ax14),
           (ax21, ax22, ax23, ax24),
           (ax31, ax32, ax33, ax34)) = plt.subplots(3, 4)
@@ -275,8 +243,6 @@ def display_after_filter(emnist_train, emnist_test):
 
 if __name__ == "__main__":
     
-    # load_image()
-
     ### Test ConvNet built w Pytorch
     '''
     # Format a default 2x2 kernel of numbers from 0 through 3
@@ -287,7 +253,8 @@ if __name__ == "__main__":
     # set up a 3x3 image matrix of numbers from 0 through 8
     image = torch.Tensor(np.arange(9).reshape(3, 3))
     image = image.reshape(1, 1, 3, 3).to('cpu') # BatchSizeXChannelsXHeightXWidth
-
+    
+    ### Without padding
     print("Image:\n" + str(image))
     print("Kernel:\n" + str(kernel))
     output = net(image) # Apply the convolution
@@ -310,6 +277,4 @@ if __name__ == "__main__":
     ### Test Section 3 ###
     ######################
     
-    # display_sample_img()
-    # plot_filters()
     display_after_filter(emnist_train, emnist_test)
