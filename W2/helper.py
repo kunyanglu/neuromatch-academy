@@ -3,12 +3,31 @@ import random
 import requests
 import torch
 import unidecode
+import time
+import math
+import string
+
+import matplotlib.pyplot as plt
+import torch.nn as nn
+from tqdm.notebook import tqdm
+from nltk.tokenize import word_tokenize
+from torchtext import data, datasets
 
 def set_seed(seed=None, seed_torch=True):
+
     if seed is None:
         seed = np.random.choice(2 ** 32)
         random.seed(seed)
         np.random.seed(seed)
+    
+    if seed_torch:
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        torch.cuda.manual_seed(seed)
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
+
+    print(f'Random seed {seed} has been set.')
 
 def seed_worker(worker_id):
     worker_seed = torch.initial_seed() % 2**32
@@ -73,6 +92,58 @@ def generate(decoder, prime_str='A', predict_len=100, temperature=0.8,
 
     return predicted
 
+#################################################
+### W2D3 Modeling Sequences and Encoding Text ###
+#################################################
+
+def cosine_similarity(vec_a, vec_b):
+    """Compute cosine similarity between vec_a and vec_b"""
+    return np.dot(vec_a, vec_b) / (np.linalg.norm(vec_a) * np.linalg.norm(vec_b))
+
+def tokenize(sentences):
+    # Tokenize the sentence
+    # from nltk.tokenize library use word_tokenize
+    token = word_tokenize(sentences)
+
+    return token
+
+def plot_train_val(x, train, val, train_label, val_label, title, y_label,
+                   color):
+    plt.plot(x, train, label=train_label, color=color)
+    plt.plot(x, val, label=val_label, color=color, linestyle='--')
+    plt.legend(loc='lower right')
+    plt.xlabel('epoch')
+    plt.ylabel(y_label)
+    plt.title(title)
+
+def download_file_from_google_drive(id, destination):
+    URL = "https://docs.google.com/uc?export=download"
+
+    session = requests.Session()
+
+    response = session.get(URL, params={ 'id': id }, stream=True)
+    token = get_confirm_token(response)
+
+    if token:
+        params = { 'id': id, 'confirm': token }
+        response = session.get(URL, params=params, stream=True)
+
+    save_response_content(response, destination)
+
+def get_confirm_token(response):
+    for key, value in response.cookies.items():
+        if key.startswith('download_warning'):
+            return value
+
+    return None
+
+def save_response_content(response, destination):
+    CHUNK_SIZE = 32768
+
+    with open(destination, "wb") as f:
+        for chunk in response.iter_content(CHUNK_SIZE):
+            if chunk: # filter out keep-alive new chunks\
+                    f.write(chunk)
 
 if __name__ == "__main__":
 
