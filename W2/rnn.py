@@ -189,6 +189,3 @@ if __name__ == "__main__":
     test_accuracy = test(vanilla_rnn_model, DEVICE, test_iter)
     print(f'Test Accuracy: {test_accuracy} with len=50\n')
 
-    # Number of model parameters
-    print(f'Number of parameters = {count_parameters(vanilla_rnn_model)}')
-
