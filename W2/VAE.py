@@ -20,84 +20,50 @@ from tqdm.notebook import tqdm, trange
 
 SEED = 2021
 
-################################
-### Coding Exercise 2 - pPCA ###
-################################
+def load_data():
+    ### Load MNIST ###
+    mnist = datasets.MNIST('./mnist/',
+                           train=True,
+                           transform=transforms.ToTensor(),
+                           download=False)
+    mnist_val = datasets.MNIST('./mnist/',
+                               train=False,
+                               transform=transforms.ToTensor(),
+                               download=False)
 
-### Generate random normally distributed data ###
-def generate_data(n_samples, mean_of_temps, cov_of_temps, seed):
-    np.random.seed(seed)
-    therm1, therm2 = np.random.multivariate_normal(mean_of_temps,
-                                    cov_of_temps,n_samples).T
-    return therm1, therm2
+    ### CIFAR 10 ###
+    cifar10 = datasets.CIFAR10('./cifar10/',
+                               train=True,
+                               transform=transforms.ToTensor(),
+                               download=False)
+    cifar10_val = datasets.CIFAR10('./cifar10/',
+                                   train=False,
+                                   transform=transforms.ToTensor(),
+                                   download=False)
+def get_data(name='mnist'):
 
-### Calculate parameters of pPCA model ###
-def get_pPCA_parameters(pc_axes, therm1, therm2):
+    if name == 'mnist':
+        my_dataset_name = "MNIST"
+        my_dataset = mnist
+        my_valset = mnist_val
+        my_dataset_shape = (1, 28, 28)
+        my_dataset_size = 28 * 28
+      
+    elif name == 'cifar10':
+        my_dataset_name = "CIFAR10"
+        my_dataset = cifar10
+        my_valset = cifar10_val
+        my_dataset_shape = (3, 32, 32)
+        my_dataset_size = 3 * 32 * 32
 
-    # thermometers data
-    therm_data = np.array([therm1, therm2])
-
-    # Zero center the data
-    therm_data_mean = np.mean(therm_data, 1)
-    therm_data_center = np.outer(therm_data_mean, np.ones(therm_data.shape[1]))
-    therm_data_zero_centered = therm_data - therm_data_center
-
-    # Calculate the variance of the projection on the PC axes
-    pc_projection = np.matmul(pc_axes, therm_data_zero_centered);
-    pc_axes_variance = np.var(pc_projection)
-
-    # Calculate the residual variance (variance not accounted for by projection on the PC axes)
-    sensor_noise_std = np.mean(np.linalg.norm(therm_data_zero_centered - np.outer(pc_axes, pc_projection), axis=0, ord=2))
-    sensor_noise_var = sensor_noise_std **2
-    
-    return sensor_noise_var, therm_data_mean, pc_axes_variance
-
-def gen_from_pPCA(noise_var, data_mean, pc_axes, pc_variance):
-
-    n_samples = 1000
-
-    # Randomly sample from z (latent space value)
-    # `z` has shape (1000,)
-    z = np.random.normal(0.0, np.sqrt(pc_variance), n_samples)
-
-    # sensor noise covariance matrix (∑)
-    epsilon_cov = [[noise_var, 0.0], [0.0, noise_var]]
-
-    # data mean reshaped for the generation
-    # `sim_mean` has shape (2,1000)
-    sim_mean = np.outer(data_mean, np.ones(n_samples))
-    
-    rand_eps = np.random.multivariate_normal([0.0, 0.0], epsilon_cov, n_samples)
-    rand_eps = rand_eps.T
-
-    therm_data_sim = sim_mean + np.outer(pc_axes, z) + rand_eps
-    return therm_data_sim
+    return my_dataset, my_dataset_name, my_dataset_shape, my_dataset_size, my_valset
 
 if __name__ == "__main__":
-
-    # biggan_model = torch.load(fname)
-
-    ##############################
-    ### Test Coding Exercise 2 ###
-    ##############################
     
-    ### Plot randomly generated data
-    n_samples = 2000
-    mean_of_temps = np.array([25, 25])
-    cov_of_temps = np.array([[10, 5], [5, 10]])
-    therm1, therm2 = generate_data(n_samples, mean_of_temps, cov_of_temps, seed=SEED)
+    #####################################
+    ### Test Section 3 - Autoencoders ###
+    #####################################
 
-    ### Add 1st PC axis to the plot
-    plt.plot(therm1, therm2, '.')
-    plt.axis('equal')
-    plt.xlabel('Thermometer 1 ($^\circ$C)')
-    plt.ylabel('Thermometer 2 ($^\circ$C)')
-    plt.plot([plt.axis()[0], plt.axis()[1]],
-             [plt.axis()[0], plt.axis()[1]])
-    plt.show()
+    train_set, dataset_name, data_shape, data_size, valid_set = get_data(name='mnist')
 
-    pc_axes = np.array([1.0, 1.0]) / np.sqrt(2.0)
-    
-    sensor_noise_var, therm_data_mean, pc_axes_variance = get_pPCA_parameters(pc_axes, therm1, therm2)
-    therm_data_sim = gen_from_pPCA(sensor_noise_var, therm_data_mean, pc_axes, pc_axes_variance)
-    print(therm_data_sim[0:2])
+
